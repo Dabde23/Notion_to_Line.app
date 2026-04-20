@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-
 load_dotenv()
 
 class NotionClient:
@@ -54,7 +53,6 @@ class NotionClient:
                             "before": end_month
                         }
                     }
-
                 ]
             }
         }
@@ -175,7 +173,6 @@ class LineClient:
         else:
             print(f"送信失敗: {r.status_code}")
             print(r.text)
-        
 
 if __name__ == "__main__":
     notion = NotionClient.setup()
@@ -187,8 +184,3 @@ if __name__ == "__main__":
     grouped_data = NotionDataProcessor.group_by_tag_and_sort(processed_data)
     final_text = NotionDataProcessor.format_grouped_text_to_plain_text(grouped_data)
     line.send_message(final_text)
-
-
-    
-
-
