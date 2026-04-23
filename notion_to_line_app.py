@@ -52,6 +52,12 @@ class NotionClient:
                         "date": {
                             "before": end_month
                         }
+                    },
+                    {
+                        "property": "請",
+                        "checkbox": {
+                            "equals": False
+                        }
                     }
                 ]
             }
@@ -76,7 +82,7 @@ class NotionDataProcessor:
 
             tags_info = props.get("社名", {}).get("multi_select", [])
             tags = [t["name"] for t in tags_info]
-            tags_str = f"[{','.join(tags)}]" if tags else ""
+            tags_str = f"{','.join(tags)}" if tags else ""
 
             is_night_work = props.get("夜勤", {}).get("checkbox", False)
             
@@ -104,7 +110,7 @@ class NotionDataProcessor:
             current_block = [f"■ {tag}"]
             for item in items:
                 day = str(item["day"])
-                line = f"{day}日 {item['title']} {item['count']}人"
+                line = f"{day}日  {item['title']}  {item['count']}人"
 
                 if item["is_night_work"]:
                     line += "（夜勤）"
