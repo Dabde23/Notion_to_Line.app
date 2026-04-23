@@ -25,8 +25,8 @@ class NotionClient:
 
     @classmethod
     def setup(cls):
-        token = st.secrets("NOTION_TOKEN")
-        db_id = st.secrets("NOTION_DATABASE_ID")
+        token = st.secrets.get("NOTION_TOKEN")
+        db_id = st.secrets.get("NOTION_DATABASE_ID")
         if not token:
             raise ValueError("トークンが見つかりません")
         if not db_id:
@@ -151,8 +151,8 @@ class LineClient:
 
     @classmethod
     def setup(cls):
-        token = st.secrets("LINE_ACCESS_TOKEN")
-        user_id = st.secrets("LINE_USER_ID")
+        token = st.secrets.get("LINE_ACCESS_TOKEN")
+        user_id = st.secrets.get("LINE_USER_ID")
         if not token:
             raise ValueError("トークンが見つかりません")
         if not user_id:
