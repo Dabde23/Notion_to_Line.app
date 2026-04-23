@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import streamlit as st
 
 load_dotenv()
 
@@ -24,8 +25,8 @@ class NotionClient:
 
     @classmethod
     def setup(cls):
-        token = os.getenv("NOTION_TOKEN")
-        db_id = os.getenv("NOTION_DATABASE_ID")
+        token = st.secrets("NOTION_TOKEN")
+        db_id = st.secrets("NOTION_DATABASE_ID")
         if not token:
             raise ValueError("トークンが見つかりません")
         if not db_id:
@@ -150,8 +151,8 @@ class LineClient:
 
     @classmethod
     def setup(cls):
-        token = os.getenv("LINE_ACCESS_TOKEN")
-        user_id = os.getenv("LINE_USER_ID")
+        token = st.secrets("LINE_ACCESS_TOKEN")
+        user_id = st.secrets("LINE_USER_ID")
         if not token:
             raise ValueError("トークンが見つかりません")
         if not user_id:
