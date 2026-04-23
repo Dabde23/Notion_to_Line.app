@@ -3,11 +3,25 @@ from datetime import datetime
 from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor
 
 st.set_page_config(page_title="出面出力マシーン")
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
-st.title ("Notion to Line Notification")
-st.markdown("指定した月の出面をNotionからテキストに変換してLineに送信")
-password = st.text_input("パスワードを入力")
-if password == st.secrets["password"]:
+if not st.session_state["authenticated"]:
+    placeholder = st.empty()
+
+    with placeholder.container():
+        password = st.text_input("パスワードを入力", type="password")
+        if password == st.secrets.get("password"):
+            st.session_state["authenticated"] = True
+            placeholder.empty()
+            st.rerun()
+        elif password != "":
+            st.error("パスワードが違います") 
+    st.stop()
+    
+    st.title ("Notion to Line Notification")
+    st.markdown("指定した月の出面をNotionからテキストに変換してLineに送信")
+
     st.sidebar.header("取得設定")
     target_year = st.sidebar.number_input("年", min_value=2024, max_value=2100, value=datetime.now().year)
     target_month = st.sidebar.selectbox("月", range(1, 13), index=datetime.now().month)
@@ -45,5 +59,4 @@ if password == st.secrets["password"]:
                     del st.session_state["final_text"]
             except Exception as e:
                 st.error(f"送信エラー {e}")    
-else:
-    st.write("パスワードが違います")        
+ 
