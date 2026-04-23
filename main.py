@@ -6,7 +6,7 @@ st.set_page_config(page_title="出面出力マシーン")
 
 st.title ("Notion to Line Notification")
 st.markdown("指定した月の出面をNotionからテキストに変換してLineに送信")
-if st.input == st.secrets["password"]:
+if st.text_input == st.secrets["password"]:
     st.sidebar.header("取得設定")
     target_year = st.sidebar.number_input("年", min_value=2024, max_value=2100, value=datetime.now().year)
     target_month = st.sidebar.selectbox("月", range(1, 13), index=datetime.now().month)
