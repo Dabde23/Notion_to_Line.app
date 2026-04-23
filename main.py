@@ -23,7 +23,7 @@ st.markdown("指定した月の出面をNotionからテキストに変換してL
 
 st.sidebar.header("取得設定")
 target_year = st.sidebar.number_input("年", min_value=2024, max_value=2100, value=datetime.now().year)
-target_month = st.sidebar.selectbox("月", range(1, 13), index=datetime.now().month)
+target_month = st.sidebar.selectbox("月", range(0, 12), index=datetime.now().month)
 
 if st.button("スケジュールの取得、確認"):
     try:
