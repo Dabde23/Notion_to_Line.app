@@ -29,7 +29,9 @@ if st.button("スケジュールの取得、確認"):
     try:
         with st.spinner("Notionからデータを取得中..."):
             #Notionから取得
-            notion = NotionClient.setup()
+            notion_token = st.secrets["NOTION_TOKEN"]
+            notion_db_id = st.secrets["NOTION_DATABASE_ID"]
+            notion = NotionClient.setup(notion_token, notion_db_id)
             results = notion.get_month_schedule(target_year, target_month)
 
             #データの加工
@@ -43,7 +45,8 @@ if st.button("スケジュールの取得、確認"):
 
             #セッションに保存
             st.session_state["final_text"] = final_text
-
+    except KeyError as e:
+        st.error(f"キーエラーが発生しました {e}")
     except Exception as e:
         st.error(f"エラーが発生しました {e}")
 
@@ -51,11 +54,15 @@ if "final_text" in st.session_state:
     if st.button("この内容で出力"):
         try:
             with st.spinner("送信中..."):
-                line = LineClient.setup()
+                line_token = st.secrets.get["LINE_ACCESS_TOKEN"]
+                line_user_id = st.secrets.get["LINE_USER_ID"]
+                line = LineClient.setup(line_token, line_user_id)
                 line.send_message(st.session_state["final_text"])
                 st.success("送信完了！")
 
                 del st.session_state["final_text"]
+        except KeyError as e:
+            st.error(f"キーエラーが発生しました {e}")
         except Exception as e:
             st.error(f"送信エラー {e}")    
  

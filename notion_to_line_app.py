@@ -1,21 +1,18 @@
 from collections import defaultdict
 import requests
-import os
-from dotenv import load_dotenv
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import streamlit as st
-
-load_dotenv()
+from typing import Self
 
 class NotionClient:
-    def __init__(self, token, db_id, url):
+    def __init__(self, token: str, db_id: str, url: str) -> None:
         self.token = token
         self.db_id = db_id
         self.url = url
         self.headers = self._make_headers()
     
-    def _make_headers(self):
+    def _make_headers(self) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
@@ -24,9 +21,9 @@ class NotionClient:
         return headers
 
     @classmethod
-    def setup(cls):
-        token = st.secrets.get("NOTION_TOKEN")
-        db_id = st.secrets.get("NOTION_DATABASE_ID")
+    def setup(cls, token: str, db_id: str) -> Self:
+        token = token
+        db_id = db_id
         if not token:
             raise ValueError("トークンが見つかりません")
         if not db_id:
@@ -35,9 +32,10 @@ class NotionClient:
         url = f"https://api.notion.com/v1/databases/{db_id}/query"
         return cls(token, db_id, url)
 
-    def get_month_schedule(self, year, month):  #NotionからJsonを抽出する
+    def get_month_schedule(self, year: int, month: int) ->list[dict]:
+        #NotionからJsonを抽出する
         target_month = datetime(year, month, 1).strftime("%Y-%m-%d")
-        end_month = (datetime(year, month, 1) + relativedelta(months=1)).replace(day=1).strftime("%Y-%m-%d")
+        end_month = (datetime(year, month, 1) + relativedelta(months=1)).strftime("%Y-%m-%d")
 
         query = {
             "filter": {
@@ -64,16 +62,17 @@ class NotionClient:
             }
         }
 
-        response = requests.post(self.url, headers=self.headers, json=query)
-        if response.status_code == 200:
-            self.results = response.json().get("results", [])
-            return self.results
+        r = requests.post(self.url, headers=self.headers, json=query)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            return results
         else:
-            print(f"エラー: {response.status_code}\n{response.text}")
+            raise Exception(f"Notion APIエラー: {r.status_code}\n{r.text}")
            
 class NotionDataProcessor:
     @staticmethod
-    def extract_text(results):  #Jsonから中身のデータをリスト化する
+    def extract_text(results: list[dict]) -> list[dict]: 
+        #Jsonから中身のデータをリスト化する
         text_list = []
         for page in results:
             props = page["properties"]
@@ -102,7 +101,8 @@ class NotionDataProcessor:
         return text_list
 
     @staticmethod
-    def format_grouped_text_to_plain_text(grouped_data):   #テキストのリストから実際に使う形に整形する
+    def format_grouped_text_to_plain_text(grouped_data: dict[str, list[dict]]) -> str:
+        #テキストのリストから実際に使う形に整形する
         if not grouped_data:
             return "予定はありません"
         
@@ -125,7 +125,7 @@ class NotionDataProcessor:
         return "\n----------\n".join(blocks)
 
     @staticmethod
-    def group_by_tag_and_sort(text_list):
+    def group_by_tag_and_sort(text_list: list[dict]) -> dict[str, list[dict]]:
         sorted_list = sorted(text_list, key=lambda x: x["day"])
         grouped_data = defaultdict(list)
 
@@ -141,6 +141,7 @@ class LineClient:
         self.user_id = user_id
         self.url = url
         self.headers = self._make_headers()
+        self.MAX_TEXT_LENGTH = 4900
     
     def _make_headers(self):
         headers = {
@@ -150,44 +151,32 @@ class LineClient:
         return headers
 
     @classmethod
-    def setup(cls):
-        token = st.secrets.get("LINE_ACCESS_TOKEN")
-        user_id = st.secrets.get("LINE_USER_ID")
+    def setup(cls, token, user_id):
+        token = token
+        user_id = user_id
         if not token:
             raise ValueError("トークンが見つかりません")
         if not user_id:
             raise ValueError("ユーザーIDが見つかりません")
 
-        url = f"https://api.line.me/v2/bot/message/push"
+        url = "https://api.line.me/v2/bot/message/push"
         return cls(token, user_id, url)
 
-    def send_message(self, final_text):
-        data = {
-            "to": self.user_id,
-            "messages": [
-                {
-                    "type": "text",
-                    "text": final_text
-                }
-            ]
-        }
+    def send_message(self, final_text: str) -> None:
+        if len(final_text) > self.MAX_TEXT_LENGTH:
+            data = {
+                "to": self.user_id,
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": final_text
+                    }
+                ]
+            }
 
-        r = requests.post(self.url, headers=self.headers, json=data)
+            r = requests.post(self.url, headers=self.headers, json=data)
 
-        if r.status_code == 200:
-            print("送信完了")
-
+            if r.status_code != 200:
+                raise Exception(f"Line APIエラー: {r.status_code}\n{r.text}")
         else:
-            print(f"送信失敗: {r.status_code}")
-            print(r.text)
-
-if __name__ == "__main__":
-    notion = NotionClient.setup()
-    line = LineClient.setup()
-    target_year = int(input("年を入力"))
-    target_month = int(input("月を入力"))
-    results = notion.get_month_schedule(target_year, target_month)
-    processed_data = NotionDataProcessor.extract_text(results)
-    grouped_data = NotionDataProcessor.group_by_tag_and_sort(processed_data)
-    final_text = NotionDataProcessor.format_grouped_text_to_plain_text(grouped_data)
-    line.send_message(final_text)
+            raise ValueError("文章が長過ぎます")
