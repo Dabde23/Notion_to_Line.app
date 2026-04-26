@@ -5,6 +5,15 @@ from dateutil.relativedelta import relativedelta
 import streamlit as st
 from typing import Self
 
+class NotionProperties:
+    SITE_NAME = "現場"
+    COMPANY = "社名"
+    NIGHT_WORK = "夜勤"
+    EXPENSES = "経費"
+    DATE = "日付"
+    WORKER_COUNT = "人数"
+    BILLED = "請"
+
 class NotionClient:
     def __init__(self, token: str, db_id: str, url: str) -> None:
         self.token = token
@@ -41,19 +50,19 @@ class NotionClient:
             "filter": {
                 "and": [
                     {
-                        "property": "日付",
+                        "property": NotionProperties.DATE,
                         "date": {
                             "on_or_after": target_month
                         }
                     },
                     {                        
-                        "property": "日付",
+                        "property": NotionProperties.DATE,
                         "date": {
                             "before": end_month
                         }
                     },
                     {
-                        "property": "請",
+                        "property": NotionProperties.BILLED,
                         "checkbox": {
                             "equals": False
                         }
@@ -62,7 +71,7 @@ class NotionClient:
             }
         }
 
-        r = requests.post(self.url, headers=self.headers, json=query)
+        r = requests.post(self.url, headers=self.headers, json=query, timeout=10)
         if r.status_code == 200:
             results = r.json().get("results", [])
             return results
@@ -77,23 +86,23 @@ class NotionDataProcessor:
         for page in results:
             props = page["properties"]
 
-            title_list = props.get("現場", {}).get("title", [])
+            title_list = props.get(NotionProperties.SITE_NAME, {}).get("title", [])
             title = title_list[0]["plain_text"] if title_list else "無題"
 
-            tags_info = props.get("社名", {}).get("multi_select", [])
+            tags_info = props.get(NotionProperties.COMPANY, {}).get("multi_select", [])
             tags = [t["name"] for t in tags_info]
             tags_str = f"{','.join(tags)}" if tags else ""
 
-            is_night_work = props.get("夜勤", {}).get("checkbox", False)
+            is_night_work = props.get(NotionProperties.NIGHT_WORK, {}).get("checkbox", False)
             
-            expenses_list = props.get("経費", {}).get("rich_text", [])
+            expenses_list = props.get(NotionProperties.NIGHT_WORK, {}).get("rich_text", [])
             expenses = expenses_list[0]["plain_text"] if expenses_list else None
 
-            date = props.get("日付", {}).get("date", {}).get("start", None)
+            date = props.get(NotionProperties.DATE, {}).get("date", {}).get("start", None)
             if not date: continue
             day = datetime.strptime(date, "%Y-%m-%d").day
 
-            worker_count = props.get("人数", {}).get("number", {})
+            worker_count = props.get(NotionProperties.WORKER_COUNT, {}).get("number", {})
 
             text = {"title": title, "tag": tags_str, "is_night_work": is_night_work, "expenses": expenses, "day":day, "count": worker_count}
             text_list.append(text)
