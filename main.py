@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor
+import hmac
 
 st.set_page_config(page_title="出面出力マシーン")
 if "authenticated" not in st.session_state:
@@ -10,7 +11,7 @@ if not st.session_state["authenticated"]:
     placeholder = st.empty()
     with placeholder.container():
         password = st.text_input("パスワードを入力", type="password")
-        if password == st.secrets.get("password"):
+        if hmac.compare_digest(password, st.secrets["password"]):
             st.session_state["authenticated"] = True
             placeholder.empty()
             st.rerun()

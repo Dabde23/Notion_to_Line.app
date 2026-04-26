@@ -1,8 +1,8 @@
 from collections import defaultdict
+from dataclasses import dataclass
 import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import streamlit as st
 from typing import Self
 
 class NotionProperties:
@@ -13,6 +13,15 @@ class NotionProperties:
     DATE = "日付"
     WORKER_COUNT = "人数"
     BILLED = "請"
+
+@dataclass
+class ScheduleItem:
+    title: str
+    tag: str
+    is_night_work: bool
+    expenses: str | None
+    day: int
+    count: int
 
 class NotionClient:
     def __init__(self, token: str, db_id: str, url: str) -> None:
@@ -80,7 +89,7 @@ class NotionClient:
            
 class NotionDataProcessor:
     @staticmethod
-    def extract_text(results: list[dict]) -> list[dict]: 
+    def extract_text(results: list[dict]) -> list[ScheduleItem]: 
         #Jsonから中身のデータをリスト化する
         text_list = []
         for page in results:
@@ -102,32 +111,35 @@ class NotionDataProcessor:
             if not date: continue
             day = datetime.strptime(date, "%Y-%m-%d").day
 
-            worker_count = props.get(NotionProperties.WORKER_COUNT, {}).get("number", {})
+            count = props.get(NotionProperties.WORKER_COUNT, {}).get("number", 0)
 
-            text = {"title": title, "tag": tags_str, "is_night_work": is_night_work, "expenses": expenses, "day":day, "count": worker_count}
-            text_list.append(text)
+            item = ScheduleItem(
+                title=title,
+                tag=tags_str,
+                is_night_work=is_night_work,
+                expenses=expenses,
+                day=day,
+                count=count
+            )
+            text_list.append(item)
 
         return text_list
 
     @staticmethod
-    def format_grouped_text_to_plain_text(grouped_data: dict[str, list[dict]]) -> str:
+    def format_grouped_text_to_plain_text(grouped_data: dict[str, list[ScheduleItem]]) -> str:
         #テキストのリストから実際に使う形に整形する
         if not grouped_data:
             return "予定はありません"
         
         blocks = []
-        for tag, items in grouped_data.items():
-            current_block = [f"■ {tag}"]
-            for item in items:
-                day = str(item["day"])
-                line = f"{day}日  {item['title']}  {item['count']}人"
-
-                if item["is_night_work"]:
+        for company, schedules in grouped_data.items():
+            current_block = [f"■ {company}"]
+            for item in schedules:
+                line = f"{item.day}日  {item.title}  {item.count}人"
+                if item.is_night_work:
                     line += "（夜勤）"
-
-                if item["expenses"]:
-                    line += f"\n  経費: {item['expenses']}"
-                
+                if item.expenses:
+                    line += f"\n  経費: {item.expenses}"
                 current_block.append(line)
             blocks.append("\n".join(current_block))
             
@@ -139,7 +151,7 @@ class NotionDataProcessor:
         grouped_data = defaultdict(list)
 
         for item in sorted_list:
-            tag = item["tag"] if item["tag"] else "[その他]"
+            tag = item["tag"] if item["tag"] else "その他"
             grouped_data[tag].append(item)
 
         return grouped_data
