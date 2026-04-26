@@ -40,8 +40,6 @@ class NotionClient:
 
     @classmethod
     def setup(cls, token: str, db_id: str) -> Self:
-        token = token
-        db_id = db_id
         if not token:
             raise ValueError("トークンが見つかりません")
         if not db_id:
@@ -50,7 +48,7 @@ class NotionClient:
         url = f"https://api.notion.com/v1/databases/{db_id}/query"
         return cls(token, db_id, url)
 
-    def get_month_schedule(self, year: int, month: int) ->list[dict]:
+    def get_month_schedule(self, year: int, month: int) -> list[dict]:
         #NotionからJsonを抽出する
         target_month = datetime(year, month, 1).strftime("%Y-%m-%d")
         end_month = (datetime(year, month, 1) + relativedelta(months=1)).strftime("%Y-%m-%d")
@@ -100,11 +98,11 @@ class NotionDataProcessor:
 
             tags_info = props.get(NotionProperties.COMPANY, {}).get("multi_select", [])
             tags = [t["name"] for t in tags_info]
-            tags_str = f"{','.join(tags)}" if tags else ""
+            tags_str = ','.join(tags) if tags else ""
 
             is_night_work = props.get(NotionProperties.NIGHT_WORK, {}).get("checkbox", False)
             
-            expenses_list = props.get(NotionProperties.NIGHT_WORK, {}).get("rich_text", [])
+            expenses_list = props.get(NotionProperties.EXPENSES, {}).get("rich_text", [])
             expenses = expenses_list[0]["plain_text"] if expenses_list else None
 
             date = props.get(NotionProperties.DATE, {}).get("date", {}).get("start", None)
@@ -157,14 +155,15 @@ class NotionDataProcessor:
         return grouped_data
 
 class LineClient:
-    def __init__(self, token, user_id, url):
+    MAX_TEXT_LENGTH = 4900
+
+    def __init__(self, token: str, user_id: str, url: str) -> None:
         self.token = token
         self.user_id = user_id
         self.url = url
         self.headers = self._make_headers()
-        self.MAX_TEXT_LENGTH = 4900
     
-    def _make_headers(self):
+    def _make_headers(self) -> dict[str, str]:
         headers = {
         "Authorization": f"Bearer {self.token}",
         "Content-Type": "application/json"
@@ -172,9 +171,7 @@ class LineClient:
         return headers
 
     @classmethod
-    def setup(cls, token, user_id):
-        token = token
-        user_id = user_id
+    def setup(cls, token: str, user_id: str) -> Self:
         if not token:
             raise ValueError("トークンが見つかりません")
         if not user_id:
@@ -184,7 +181,7 @@ class LineClient:
         return cls(token, user_id, url)
 
     def send_message(self, final_text: str) -> None:
-        if len(final_text) > self.MAX_TEXT_LENGTH:
+        if len(final_text) <= self.MAX_TEXT_LENGTH:
             data = {
                 "to": self.user_id,
                 "messages": [
@@ -195,7 +192,7 @@ class LineClient:
                 ]
             }
 
-            r = requests.post(self.url, headers=self.headers, json=data)
+            r = requests.post(self.url, headers=self.headers, json=data, timeout=10)
 
             if r.status_code != 200:
                 raise Exception(f"Line APIエラー: {r.status_code}\n{r.text}")
