@@ -55,8 +55,8 @@ if "final_text" in st.session_state:
     if st.button("この内容で出力"):
         try:
             with st.spinner("送信中..."):
-                line_token = st.secrets.get["LINE_ACCESS_TOKEN"]
-                line_user_id = st.secrets.get["LINE_USER_ID"]
+                line_token = st.secrets["LINE_ACCESS_TOKEN"]
+                line_user_id = st.secrets["LINE_USER_ID"]
                 line = LineClient.setup(line_token, line_user_id)
                 line.send_message(st.session_state["final_text"])
                 st.success("送信完了！")
