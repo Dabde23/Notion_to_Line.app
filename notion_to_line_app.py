@@ -146,12 +146,12 @@ class NotionDataProcessor:
         return "\n----------\n".join(blocks)
 
     @staticmethod
-    def group_by_tag_and_sort(text_list: list[dict]) -> dict[str, list[dict]]:
-        sorted_list = sorted(text_list, key=lambda x: x["day"])
+    def group_by_tag_and_sort(text_list: list[ScheduleItem]) -> dict[str, list[ScheduleItem]]:
+        sorted_list = sorted(text_list, key=lambda x: x.day)
         grouped_data = defaultdict(list)
 
         for item in sorted_list:
-            tag = item["tag"] if item["tag"] else "その他"
+            tag = item.tag if item.tag else "その他"
             grouped_data[tag].append(item)
 
         return grouped_data
