@@ -4,10 +4,11 @@ import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Self
+from enum import StrEnum
 
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 15
-class NotionProperties:
+class NotionProperties(StrEnum):
     SITE_NAME = "現場"
     COMPANY = "社名"
     NIGHT_WORK = "夜勤"
@@ -23,7 +24,7 @@ class ScheduleItem:
     is_night_work: bool
     expenses: str | None
     day: int
-    count: int
+    count: int | None
 
 class NotionClient:
     def __init__(self, token: str, db_id: str, url: str) -> None:
