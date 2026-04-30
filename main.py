@@ -2,21 +2,29 @@ import streamlit as st
 from datetime import datetime
 from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor
 import hmac
+import logging
 
+logger = logging.getLogger(__name__)
 st.set_page_config(page_title="出面出力マシーン")
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
     placeholder = st.empty()
+    if "login_attempt" not in st.session_state:
+        st.session_state["login_attempt"] = 0
     with placeholder.container():
         password = st.text_input("パスワードを入力", type="password")
-        if hmac.compare_digest(password, st.secrets["password"]):
+        if password and hmac.compare_digest(password, st.secrets["password"]):
             st.session_state["authenticated"] = True
             placeholder.empty()
             st.rerun()
         elif password != "":
-            st.error("パスワードが違います") 
+            st.error("パスワードが違います")
+            st.session_state["login_attempt"] += 1
+            if st.session_state["login_attempt"] >= 5:
+                st.error("試行回数が上限に達しました")
+                st.stop()
     st.stop()
     
 st.title ("Notion to Line Notification")
@@ -47,9 +55,11 @@ if st.button("スケジュールの取得、確認"):
             #セッションに保存
             st.session_state["final_text"] = final_text
     except KeyError as e:
-        st.error(f"キーエラーが発生しました {e}")
+        logger.error(f"キーエラー: {e}", exc_info=True)
+        st.error(f"キーエラーが発生しました")
     except Exception as e:
-        st.error(f"エラーが発生しました {e}")
+        logger.error(f"エラー: {e}", exc_info=True)
+        st.error(f"エラーが発生しました")
 
 if "final_text" in st.session_state:
     if st.button("この内容で出力"):
@@ -61,9 +71,12 @@ if "final_text" in st.session_state:
                 line.send_message(st.session_state["final_text"])
                 st.success("送信完了！")
 
-                del st.session_state["final_text"]
         except KeyError as e:
-            st.error(f"キーエラーが発生しました {e}")
+            logger.error(f"キーエラー: {e}", exc_info=True)
+            st.error(f"キーエラーが発生しました")
         except Exception as e:
-            st.error(f"送信エラー {e}")    
+            logger.error(f"エラー: {e}", exc_info=True)
+            st.error(f"送信エラー")
+        finally:
+            st.session_state.pop("final_text", None)
  

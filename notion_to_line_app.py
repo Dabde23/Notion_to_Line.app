@@ -5,6 +5,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Self
 
+CONNECT_TIMEOUT = 5
+READ_TIMEOUT = 15
 class NotionProperties:
     SITE_NAME = "現場"
     COMPANY = "社名"
@@ -40,8 +42,10 @@ class NotionClient:
 
     @classmethod
     def setup(cls, token: str, db_id: str) -> Self:
+        token = token.strip()
         if not token:
             raise ValueError("トークンが見つかりません")
+        db_id = db_id.strip()
         if not db_id:
             raise ValueError("データベースIDが見つかりません")
 
@@ -78,7 +82,7 @@ class NotionClient:
             }
         }
 
-        r = requests.post(self.url, headers=self.headers, json=query, timeout=10)
+        r = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
         if r.status_code == 200:
             results = r.json().get("results", [])
             return results
@@ -91,7 +95,9 @@ class NotionDataProcessor:
         #Jsonから中身のデータをリスト化する
         text_list = []
         for page in results:
-            props = page["properties"]
+            props = page.get("properties", {})
+            if not props:
+                continue
 
             title_list = props.get(NotionProperties.SITE_NAME, {}).get("title", [])
             title = title_list[0]["plain_text"] if title_list else "無題"
@@ -192,7 +198,7 @@ class LineClient:
                 ]
             }
 
-            r = requests.post(self.url, headers=self.headers, json=data, timeout=10)
+            r = requests.post(self.url, headers=self.headers, json=data, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
 
             if r.status_code != 200:
                 raise Exception(f"Line APIエラー: {r.status_code}\n{r.text}")
