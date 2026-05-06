@@ -1,8 +1,10 @@
+from requests import HTTPError
 import streamlit as st
 from datetime import datetime
 from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor
 import hmac
 import logging
+from requests import HTTPError
 
 logger = logging.getLogger(__name__)
 st.set_page_config(page_title="出面出力マシーン")
@@ -56,7 +58,10 @@ if st.button("スケジュールの取得、確認"):
             st.session_state["final_text"] = final_text
     except KeyError as e:
         logger.error(f"キーエラー: {e}", exc_info=True)
-        st.error(f"キーエラーが発生しました")
+        st.error("キーエラーが発生しました")
+    except HTTPError as e:
+        logger.error(f"httpエラー: {e}", exc_info=True)
+        st.error(str(e))
     except Exception as e:
         logger.error(f"エラー: {e}", exc_info=True)
         st.error(f"エラーが発生しました")

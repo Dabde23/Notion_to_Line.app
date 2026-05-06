@@ -87,6 +87,8 @@ class NotionClient:
         if r.status_code == 200:
             results = r.json().get("results", [])
             return results
+        elif r.status_code == 404:
+            raise requests.HTTPError(f"データベースが存在しないかIDが間違っています: {r.status_code}", response=r)
         else:
             raise Exception(f"Notion APIエラー: {r.status_code}\n{r.text}")
            
