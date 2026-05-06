@@ -4,7 +4,6 @@ from datetime import datetime
 from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor
 import hmac
 import logging
-from requests import HTTPError
 
 logger = logging.getLogger(__name__)
 st.set_page_config(page_title="出面出力マシーン")
