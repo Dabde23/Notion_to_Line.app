@@ -35,13 +35,23 @@ st.markdown("指定した月の出面をNotionからテキストに変換してL
 st.sidebar.header("取得設定")
 target_year = st.sidebar.number_input("年", min_value=2024, max_value=2100, value=datetime.now().year)
 target_month = st.sidebar.selectbox("月", range(1, 13), index=datetime.now().month - 1)
+def get_secret(key: str) -> str:
+    try:
+        value = st.secrets.get(key)
+        if not value:
+            raise KeyError(f" {key} が存在しません")
+        return value
+    except KeyError as e:
+        st.error(e)
+        logger.error(e)
+        st.stop()
 
 if st.button("スケジュールの取得、確認"):
     try:
         with st.spinner("Notionからデータを取得中..."):
             #Notionから取得
-            notion_token = st.secrets["NOTION_TOKEN"]
-            notion_db_id = st.secrets["NOTION_DATABASE_ID"]
+            notion_token = get_secret("NOTION_TOKEN")
+            notion_db_id = get_secret("NOTION_DATABASE_ID")
             notion = NotionClient.setup(notion_token, notion_db_id)
             results = notion.get_month_schedule(target_year, target_month)
 
@@ -65,13 +75,16 @@ if st.button("スケジュールの取得、確認"):
     except Exception as e:
         logger.error(f"エラー: {e}", exc_info=True)
         st.error(f"エラーが発生しました")
+    finally:
+        del notion_token
+        del notion_db_id
 
 if "final_text" in st.session_state:
     if st.button("この内容で出力"):
         try:
             with st.spinner("送信中..."):
-                line_token = st.secrets["LINE_ACCESS_TOKEN"]
-                line_user_id = st.secrets["LINE_USER_ID"]
+                line_token = get_secret("LINE_ACCESS_TOKEN")
+                line_user_id = get_secret("LINE_USER_ID")
                 line = LineClient.setup(line_token, line_user_id)
                 line.send_message(st.session_state["final_text"])
                 st.success("送信完了！")
@@ -84,4 +97,6 @@ if "final_text" in st.session_state:
             st.error(f"送信エラー")
         finally:
             st.session_state.pop("final_text", None)
+            del line_token
+            del line_user_id
  
