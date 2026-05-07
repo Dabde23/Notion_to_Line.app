@@ -5,9 +5,16 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Self
 from enum import StrEnum
+from dotenv import load_dotenv
+import os
+
+
+load_dotenv()
 
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 15
+MAX_PAGE = 10
+
 class NotionProperties(StrEnum):
     SITE_NAME = "現場"
     COMPANY = "社名"
@@ -57,7 +64,7 @@ class NotionClient:
         #NotionからJsonを抽出する
         target_month = datetime(year, month, 1).strftime("%Y-%m-%d")
         end_month = (datetime(year, month, 1) + relativedelta(months=1)).strftime("%Y-%m-%d")
-
+        results = []
         query = {
             "filter": {
                 "and": [
@@ -82,19 +89,42 @@ class NotionClient:
                 ]
             }
         }
-
-        r = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
-        if r.status_code == 200:
-            results = r.json().get("results", [])
-            return results
-        elif r.status_code == 404:
-            raise requests.HTTPError(f"データベースが存在しないかIDが間違っています: {r.status_code}", response=r)
+        response = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+        r = response.json()
+        if response.status_code == 200:
+            results += r.get("results", [])
+        elif response.status_code == 404:
+            raise requests.HTTPError(f"データベースが存在しないかIDが間違っています: {response.status_code}", response=r)
         else:
-            raise Exception(f"Notion APIエラー: {r.status_code}\n{r.text}")
+            raise Exception(f"Notion APIエラー: {response.status_code}")
+
+        has_more = r.get("has_more", False)
+        page_count = 0
+        while has_more and page_count < MAX_PAGE:
+            next_cursor = r.get("next_cursor")
+            query["start_cursor"] = next_cursor
+            page_count += 1
+            
+            response = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+            r = response.json()
+            has_more = r.get("has_more", False)
+            if response.status_code == 200:
+                results += r.get("results", [])
+            elif response.status_code == 404:
+                raise requests.HTTPError(f"データベースが存在しないかIDが間違っています: {response.status_code}", response=r)
+            else:
+                raise Exception(f"Notion APIエラー: {response.status_code}")
+        return results
            
 class NotionDataProcessor:
-    @staticmethod
-    def extract_text(results: list[dict]) -> list[ScheduleItem]: 
+    def get_formatted_text(self, results):
+        #データを整形するメソッドを順次呼び出す
+        self.extract_text(results)
+        self.group_by_tag_and_sort()
+        self.format_grouped_text_to_plain_text()
+        return self.formatted_text
+
+    def extract_text(self, results: list[dict]):
         #Jsonから中身のデータをリスト化する
         text_list = []
         for page in results:
@@ -129,17 +159,26 @@ class NotionDataProcessor:
                 count=count
             )
             text_list.append(item)
+        self.text_list = text_list
 
-        return text_list
+    def group_by_tag_and_sort(self):
+        #グルーピング及びソート
+        sorted_list = sorted(self.text_list, key=lambda x: x.day)
+        grouped_data = defaultdict(list)
 
-    @staticmethod
-    def format_grouped_text_to_plain_text(grouped_data: dict[str, list[ScheduleItem]]) -> str:
+        for item in sorted_list:
+            tag = item.tag if item.tag else "その他"
+            grouped_data[tag].append(item)
+
+        self.grouped_data = grouped_data
+
+    def format_grouped_text_to_plain_text(self) -> str:
         #テキストのリストから実際に使う形に整形する
-        if not grouped_data:
+        if not self.grouped_data:
             return "予定はありません"
         
         blocks = []
-        for company, schedules in grouped_data.items():
+        for company, schedules in self.grouped_data.items():
             current_block = [f"■ {company}"]
             for item in schedules:
                 line = f"{item.day}日  {item.title}  {item.count}人"
@@ -149,19 +188,8 @@ class NotionDataProcessor:
                     line += f"\n  経費: {item.expenses}"
                 current_block.append(line)
             blocks.append("\n".join(current_block))
-            
-        return "\n----------\n".join(blocks)
 
-    @staticmethod
-    def group_by_tag_and_sort(text_list: list[ScheduleItem]) -> dict[str, list[ScheduleItem]]:
-        sorted_list = sorted(text_list, key=lambda x: x.day)
-        grouped_data = defaultdict(list)
-
-        for item in sorted_list:
-            tag = item.tag if item.tag else "その他"
-            grouped_data[tag].append(item)
-
-        return grouped_data
+        self.formatted_text = "\n----------\n".join(blocks)
 
 class LineClient:
     MAX_TEXT_LENGTH = 4900
@@ -204,6 +232,22 @@ class LineClient:
             r = requests.post(self.url, headers=self.headers, json=data, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
 
             if r.status_code != 200:
-                raise Exception(f"Line APIエラー: {r.status_code}\n{r.text}")
+                raise Exception(f"Line APIエラー: {r.status_code}")
         else:
             raise ValueError("文章が長過ぎます")
+
+if __name__ == "__main__":
+    notion = NotionClient.setup(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DATABASE_ID"))
+    line = LineClient.setup(os.getenv("LINE_ACCESS_TOKEN"), os.getenv("LINE_USER_ID"))
+    formatter = NotionDataProcessor()
+    year = int(input("西暦を入力"))
+    month = int(input("月を入力"))
+    results = notion.get_month_schedule(year, month)
+    final_text = formatter.get_formatted_text(results)
+    
+    print(f"プレビュー \n {final_text}")
+    confirm = input("lineに送信? y")
+    if confirm == "y":
+        line.send_message(final_text)
+    
+    

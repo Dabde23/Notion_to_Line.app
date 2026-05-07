@@ -7,27 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 st.set_page_config(page_title="出面出力マシーン")
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
 
-if not st.session_state["authenticated"]:
-    placeholder = st.empty()
-    if "login_attempt" not in st.session_state:
-        st.session_state["login_attempt"] = 0
-    with placeholder.container():
-        password = st.text_input("パスワードを入力", type="password")
-        if password and hmac.compare_digest(password, st.secrets["password"]):
-            st.session_state["authenticated"] = True
-            placeholder.empty()
-            st.rerun()
-        elif password != "":
-            st.error("パスワードが違います")
-            st.session_state["login_attempt"] += 1
-            if st.session_state["login_attempt"] >= 5:
-                st.error("試行回数が上限に達しました")
-                st.stop()
-    st.stop()
-    
 st.title ("Notion to Line Notification")
 st.markdown("指定した月の出面をNotionからテキストに変換してLineに送信")
 
@@ -55,9 +35,8 @@ if st.button("スケジュールの取得、確認"):
             results = notion.get_month_schedule(target_year, target_month)
 
             #データの加工
-            processed_data = NotionDataProcessor.extract_text(results)
-            grouped_data = NotionDataProcessor.group_by_tag_and_sort(processed_data)
-            final_text = NotionDataProcessor.format_grouped_text_to_plain_text(grouped_data)
+            formatter = NotionDataProcessor()
+            final_text = formatter.get_formatted_text(results)
 
             #プレビュー表示
             st.subheader("プレビュー")
