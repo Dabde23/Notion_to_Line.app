@@ -1,6 +1,5 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from sys import exception
 import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -32,7 +31,11 @@ class ScheduleItem:
     is_night_work: bool
     expenses: str | None
     day: int
-    count: int | None
+    count: int
+
+    def __post_init__(self):
+        if self.title is None or self.tag is None or self.is_night_work is None or self.day is None or self.count is None:
+            raise NotionDataError()
 
 class NotionClient:
     def __init__(self, token: str, db_id: str, url: str) -> None:
@@ -138,14 +141,14 @@ class NotionDataProcessor:
             if not props:
                 continue
 
-            title_list = props.get(NotionProperties.SITE_NAME, {}).get("title", [])
-            title = title_list[0]["plain_text"] if title_list else "無題"
+            title_list = props.get(NotionProperties.SITE_NAME, {}).get("title", None)
+            title = title_list[0]["plain_text"] if title_list else None
 
             tags_info = props.get(NotionProperties.COMPANY, {}).get("multi_select", [])
             tags = [t["name"] for t in tags_info]
             tags_str = ','.join(tags) if tags else ""
 
-            is_night_work = props.get(NotionProperties.NIGHT_WORK, {}).get("checkbox", False)
+            is_night_work = props.get(NotionProperties.NIGHT_WORK, {}).get("checkbox", None)
             
             expenses_list = props.get(NotionProperties.EXPENSES, {}).get("rich_text", [])
             expenses = expenses_list[0]["plain_text"] if expenses_list else None
@@ -154,18 +157,19 @@ class NotionDataProcessor:
             if not date: continue
             day = datetime.strptime(date, "%Y-%m-%d").day
 
-            count = props.get(NotionProperties.WORKER_COUNT, {}).get("number", 0)
-
+            count = props.get(NotionProperties.WORKER_COUNT, {}).get("number", None)
+        
             item = ScheduleItem(
-                title=title,
-                tag=tags_str,
-                is_night_work=is_night_work,
-                expenses=expenses,
-                day=day,
-                count=count
+            title=title,
+            tag=tags_str,
+            is_night_work=is_night_work,
+            expenses=expenses,
+            day=day,
+            count=count
             )
-            text_list.append(item)
+            text_list.append(item)   
         self.text_list = text_list
+        
 
     def group_by_tag_and_sort(self):
         #グルーピング及びソート
@@ -216,14 +220,15 @@ class LineClient:
     @classmethod
     def setup(cls, token: str, user_id: str) -> Self:
         if not token:
-            raise NotionConfigError("トークンが見つかりません")
+            raise LineConfigError("トークンが見つかりません")
         if not user_id:
-            raise NotionConfigError("ユーザーIDが見つかりません")
+            raise LineConfigError("ユーザーIDが見つかりません")
 
         url = "https://api.line.me/v2/bot/message/push"
         return cls(token, user_id, url)
 
     def send_message(self, final_text: str) -> None:
+        
         if len(final_text) <= self.MAX_TEXT_LENGTH:
             data = {
                 "to": self.user_id,
@@ -234,13 +239,25 @@ class LineClient:
                     }
                 ]
             }
-
-            r = requests.post(self.url, headers=self.headers, json=data, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
-
-            if r.status_code != 200:
-                raise Exception(f"Line APIエラー: {r.status_code}")
         else:
-            raise ValueError("文章が長過ぎます")
+            raise LineMessageError(len(final_text), self.MAX_TEXT_LENGTH)
+
+        try:
+            r = requests.post(self.url, headers=self.headers, json=data, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+            self._handle_response(r)
+
+        except requests.RequestException:
+            raise LineServerError()
+
+    @staticmethod
+    def _handle_response(response):
+        if response.status_code == 400:
+            raise LineConfigError()
+        if response.status_code == 401:
+            raise LineConfigError(f"APIキーが無効です: {response.status_code}")
+        if response.status_code >= 500:
+            raise LineServerError()
+        
 
 class AppError(Exception):
     pass
@@ -285,6 +302,11 @@ class LineMessageError(LineError):
         self.length = length
         self.limit = limit
         super().__init__(f"文字数超過: {length}文字　(上限文字数{limit}文字)")
+
+class LineServerError(LineError):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        super().__init__(f"Notionサーバーエラー: {status_code}")
 
 if __name__ == "__main__":
     notion = NotionClient.setup(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DATABASE_ID"))
