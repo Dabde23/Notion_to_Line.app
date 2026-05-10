@@ -1,5 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
+from sys import exception
 import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -52,10 +53,10 @@ class NotionClient:
     def setup(cls, token: str, db_id: str) -> Self:
         token = token.strip()
         if not token:
-            raise ValueError("トークンが見つかりません")
+            raise NotionConfigError("トークンが見つかりません")
         db_id = db_id.strip()
         if not db_id:
-            raise ValueError("データベースIDが見つかりません")
+            raise NotionConfigError("データベースIDが見つかりません")
 
         url = f"https://api.notion.com/v1/databases/{db_id}/query"
         return cls(token, db_id, url)
@@ -89,32 +90,37 @@ class NotionClient:
                 ]
             }
         }
-        response = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
-        r = response.json()
-        if response.status_code == 200:
-            results += r.get("results", [])
-        elif response.status_code == 404:
-            raise requests.HTTPError(f"データベースが存在しないかIDが間違っています: {response.status_code}", response=r)
-        else:
-            raise Exception(f"Notion APIエラー: {response.status_code}")
-
-        has_more = r.get("has_more", False)
+        has_more = True
+        next_cursor = None
         page_count = 0
         while has_more and page_count < MAX_PAGE:
-            next_cursor = r.get("next_cursor")
-            query["start_cursor"] = next_cursor
-            page_count += 1
-            
-            response = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
-            r = response.json()
-            has_more = r.get("has_more", False)
-            if response.status_code == 200:
+            if next_cursor:
+                query["start_cursor"] = next_cursor
+            try:
+                response = requests.post(self.url, headers=self.headers, json=query, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+                r = self._handle_response(response).json()
                 results += r.get("results", [])
-            elif response.status_code == 404:
-                raise requests.HTTPError(f"データベースが存在しないかIDが間違っています: {response.status_code}", response=r)
-            else:
-                raise Exception(f"Notion APIエラー: {response.status_code}")
+                has_more = r.get("has_more", False)
+                page_count += 1
+            except requests.exceptions.RequestException as e:
+                raise NotionTransientError(e)
+
         return results
+    @staticmethod
+    def _handle_response(response):
+        if response.status_code == 200:
+            return response
+        elif response.status_code ==400:
+            raise NotionConfigError()
+        elif response.status_code ==401:
+            raise NotionConfigError(f"無効なAPIキー: {response.status_code}")
+        elif response.status_code == 404:
+            raise NotionDataError(response.status_code)
+        elif response.status_code == 429:
+            raise NotionRateLimitError(response.status_code)
+        elif response.status_code >= 500:
+            raise NotionServerError(response.status_code)
+
            
 class NotionDataProcessor:
     def get_formatted_text(self, results):
@@ -210,9 +216,9 @@ class LineClient:
     @classmethod
     def setup(cls, token: str, user_id: str) -> Self:
         if not token:
-            raise ValueError("トークンが見つかりません")
+            raise NotionConfigError("トークンが見つかりません")
         if not user_id:
-            raise ValueError("ユーザーIDが見つかりません")
+            raise NotionConfigError("ユーザーIDが見つかりません")
 
         url = "https://api.line.me/v2/bot/message/push"
         return cls(token, user_id, url)
@@ -235,6 +241,50 @@ class LineClient:
                 raise Exception(f"Line APIエラー: {r.status_code}")
         else:
             raise ValueError("文章が長過ぎます")
+
+class AppError(Exception):
+    pass
+
+class NotionError(AppError):
+    pass
+
+class NotionConfigError(NotionError):
+    pass
+
+class NotionDataError(NotionError):
+    def __init__(self, status_code: int | None = None):
+        self.status_code = status_code
+        if self.status_code is not None:
+            super().__init__(f"データベースが存在しないかIDが間違っています: {status_code}")
+        else:
+            super().__init__("プロパティが存在しません")
+
+class NotionTransientError(NotionError):
+    def __init__(self,status_code: int | None = None, message: str | None = "接続エラー"):
+        self.status_code = status_code
+        super().__init__(message)
+
+class NotionServerError(NotionTransientError):
+    def __init__(self,status_code: int):
+        self.status_code = status_code
+        super().__init__(status_code, f"Notionサーバーエラー: {status_code}")
+
+class NotionRateLimitError(NotionTransientError):
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        super().__init__(status_code, f"リクエスト過多: {status_code}")
+
+class LineError(AppError):
+    pass
+
+class LineConfigError(LineError):
+    pass
+
+class LineMessageError(LineError):
+    def __init__(self, length: int, limit: int):
+        self.length = length
+        self.limit = limit
+        super().__init__(f"文字数超過: {length}文字　(上限文字数{limit}文字)")
 
 if __name__ == "__main__":
     notion = NotionClient.setup(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DATABASE_ID"))
