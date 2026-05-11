@@ -1,8 +1,8 @@
 from datetime import datetime
 import streamlit as st
 import logging
-from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor
-from requests import HTTPError
+from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor, NotionError, LineError
+
 
 logger = logging.getLogger(__name__)
 st.set_page_config(page_title="出面出力マシーン")
@@ -30,12 +30,14 @@ if st.button("スケジュールの取得、確認"):
             #Notionから取得
             notion_token = get_secret("NOTION_TOKEN")
             notion_db_id = get_secret("NOTION_DATABASE_ID")
+            
             notion = NotionClient.setup(notion_token, notion_db_id)
             results = notion.get_month_schedule(target_year, target_month)
 
             #データの加工
             formatter = NotionDataProcessor()
             final_text = formatter.get_formatted_text(results)
+            
 
             #プレビュー表示
             st.subheader("プレビュー")
@@ -43,12 +45,11 @@ if st.button("スケジュールの取得、確認"):
 
             #セッションに保存
             st.session_state["final_text"] = final_text
+    except NotionError as e:
+        logger.error(f"Notionエラー: {e}", exc_info=True)
     except KeyError as e:
         logger.error(f"キーエラー: {e}", exc_info=True)
         st.error("キーエラーが発生しました")
-    except HTTPError as e:
-        logger.error(f"httpエラー: {e}", exc_info=True)
-        st.error(str(e))
     except Exception as e:
         logger.error(f"エラー: {e}", exc_info=True)
         st.error(f"エラーが発生しました")
@@ -66,6 +67,9 @@ if "final_text" in st.session_state:
                 line.send_message(st.session_state["final_text"])
                 st.success("送信完了！")
 
+        except LineError as e:
+            logger.error(f"Lineエラー: {e}", exc_info=True)
+            st.error(f"Lineエラー")
         except KeyError as e:
             logger.error(f"キーエラー: {e}", exc_info=True)
             st.error(f"キーエラーが発生しました")
