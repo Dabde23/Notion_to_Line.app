@@ -1,7 +1,7 @@
 from datetime import datetime
 import streamlit as st
 import logging
-from notion_to_line_app import NotionClient, LineClient, NotionDataProcessor, NotionError, LineError
+from notion_to_line_app import NotionClient, LineClient, NotionError, LineError, extract_text, group_by_tag, format_plain_text
 
 
 logger = logging.getLogger(__name__)
@@ -35,10 +35,10 @@ if st.button("スケジュールの取得、確認"):
             results = notion.get_month_schedule(target_year, target_month)
 
             #データの加工
-            formatter = NotionDataProcessor()
-            final_text = formatter.get_formatted_text(results)
+            text_list = extract_text(results)
+            grouped = group_by_tag(text_list)
+            final_text = format_plain_text(grouped)
             
-
             #プレビュー表示
             st.subheader("プレビュー")
             st.text_area("以下の内容を送信", value=final_text, height=300)
