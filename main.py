@@ -24,6 +24,7 @@ def get_secret(key: str) -> str:
         logger.error(e)
         st.stop()
 
+
 if st.button("スケジュールの取得、確認"):
     try:
         with st.spinner("Notionからデータを取得中..."):
